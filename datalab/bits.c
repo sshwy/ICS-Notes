@@ -143,7 +143,8 @@ NOTES:
  *   Rating: 1
  */
 int bitXor(int x, int y) {
-  return 2;
+  /* x ^ y = (x & ~y) | (y & ~x); x | y = ~(~x & ~y) */
+  return ~(~(x & ~ y) & ~(y & ~x));
 }
 /* 
  * tmin - return minimum two's complement integer 
@@ -153,7 +154,7 @@ int bitXor(int x, int y) {
  */
 int tmin(void) {
 
-  return 2;
+  return 1 << 31;
 
 }
 //2
@@ -165,7 +166,9 @@ int tmin(void) {
  *   Rating: 1
  */
 int isTmax(int x) {
-  return 2;
+  /* x == Tmax <=> x + 1 == (~x) and x != -1 */
+  int x1 = x + 1, x2 = ~x;
+  return !((x1 ^ x2) | !x2);
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -176,7 +179,12 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-  return 2;
+  /* let x[31] = x[31] & x[29] & ... & x[1] by binary lifting trick. */
+  x = x & (x << 16);
+  x = x & (x << 8);
+  x = x & (x << 4);
+  x = x & (x << 2);
+  return !~(x >> 31);
 }
 /* 
  * negate - return -x 
@@ -186,7 +194,7 @@ int allOddBits(int x) {
  *   Rating: 2
  */
 int negate(int x) {
-  return 2;
+  return (~x) + 1;
 }
 //3
 /* 
@@ -199,7 +207,11 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-  return 2;
+  /* 0 <= x < 256 && (x - 0x30) >= 0 && (x - 0x3A) < 0 */
+  int not_large = !(x >> 8);
+  int y = x + (~0x30) + 1;
+  int z = x + (~0x3A) + 1;
+  return not_large & ((y ^ z) >> 31);
 }
 /* 
  * conditional - same as x ? y : z 
@@ -209,7 +221,9 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-  return 2;
+  /* int x1 = x ? -1 : 0; */
+  int x1 = (!!x) << 31 >> 31;
+  return (y & x1) + (z & ~x1);
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -219,7 +233,15 @@ int conditional(int x, int y, int z) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-  return 2;
+  // Q: why this can pass ???
+  // return !!((~(y + (~x) + 1)) >> 31);
+
+  /* 直接 y - x >=0 会有减法溢出的问题，因此要加点东西 */
+  int z = y + (~x) + 1;
+  int d = x ^ y;
+  /* ( (x < 0 && y >= 0) || y - x >= 0 ) && !( x >= 0 && y < 0 ) */
+  int f = ((d & x) | ~z) & ~(d & y);
+  return !!(f >> 31);
 }
 //4
 /* 
@@ -231,7 +253,13 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4 
  */
 int logicalNeg(int x) {
-  return 2;
+  /* !x == (x ? -1 : 0) + 1 */
+  x = x | (x << 16);
+  x = x | (x << 8);
+  x = x | (x << 4);
+  x = x | (x << 2);
+  x = x | (x << 1);
+  return (x >> 31) + 1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -246,7 +274,39 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-  return 0;
+  int x0, x1, x2, x3;
+  /* 将 leading-one 统一为 leading-zero */
+  x = x ^ (x >> 31); 
+
+  /* 转化为 0...01...1 的形式 */
+  x = x | x >> 1;
+  x = x | x >> 2;
+  x = x | x >> 4;
+  x = x | x >> 8;
+  x = x | x >> 16;
+
+  /* popcount */
+  x0 = x & 0xff;
+  x0 = (x0 >> 1 & 0x55) + (x0 & 0x55);
+  x0 = (x0 >> 2 & 0x33) + (x0 & 0x33);
+  x0 = (x0 >> 4 & 0x0f) + (x0 & 0x0f);
+
+  x1 = x >> 8 & 0xff;
+  x1 = (x1 >> 1 & 0x55) + (x1 & 0x55);
+  x1 = (x1 >> 2 & 0x33) + (x1 & 0x33);
+  x1 = (x1 >> 4 & 0x0f) + (x1 & 0x0f);
+
+  x2 = x >> 16 & 0xff;
+  x2 = (x2 >> 1 & 0x55) + (x2 & 0x55);
+  x2 = (x2 >> 2 & 0x33) + (x2 & 0x33);
+  x2 = (x2 >> 4 & 0x0f) + (x2 & 0x0f);
+
+  x3 = x >> 24;
+  x3 = (x3 >> 1 & 0x55) + (x3 & 0x55);
+  x3 = (x3 >> 2 & 0x33) + (x3 & 0x33);
+  x3 = (x3 >> 4 & 0x0f) + (x3 & 0x0f);
+
+  return x0 + x1 + x2 + x3 + 1;
 }
 //float
 /* 
