@@ -321,7 +321,30 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  return 2;
+  /* 1 + 8 + 23 */
+  unsigned sig = uf & 0x80000000;
+  unsigned exp = uf & 0x7f800000;
+  unsigned frac = uf & 0x7fffff;
+  if ((exp + 0x800000) & 0x80000000) { // special case (NaN or inf)
+    return uf;
+  }
+  if (!exp) { // denormalized
+    if (frac >> 22) { // to normalized
+      // 0.1xxxx << exp -> 1.xxxx << exp'
+      // original exp: 1 - bias = -126
+      // -126 = exp' - bias
+      // exp' = 1
+      return sig | (1u << 23) | ((frac & 0x3fffff) << 1);
+    } else { // still denormalized
+      return sig | exp | (frac << 1);
+    }
+  }
+  // normalized
+  if ((exp + 0x1000000) & 0x80000000) { // inf
+    return sig | 0x7f800000;
+  } else {
+    return sig | (exp + 0x800000) | frac;
+  }
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -336,7 +359,39 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+  /* 1 + 8 + 23 */
+  unsigned sig = uf & 0x80000000;
+  unsigned exp = uf & 0x7f800000;
+  unsigned frac = uf & 0x7fffff;
+  unsigned m, m2;
+  int e, e2;
+  if ((exp + 0x800000) & 0x80000000) { // special case (NaN or inf)
+    return 0x80000000;
+  }
+  if (!exp) { // denormalized
+    return 0;
+  }
+  // normalized
+  e = (exp >> 23) - 127;
+  if (e < -1) { // round to 0
+    return 0;
+  }
+  if (e >= 31) { // e out of range
+    return 0x80000000;
+  }
+  e2 = e - 23;
+  // e - 23 < 8
+  m = 0x800000 | frac; // 1.xxxx
+  if (e2 >= 0) {
+    m2 = m << e2;
+  } else { // truncating
+    m2 = m >> (-e2);
+  }
+  if (sig) { // negative
+    return -m2;
+  } else {
+    return m2;
+  }
 }
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -352,5 +407,14 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+  // 1 - bias = -126
+  if (x < -149) return 0;
+  if (x < -126) { // denormalized
+    return 1u << (x + 149);
+  }
+  if (x < 128) { // normalized
+    unsigned exp = x + 127;
+    return exp << 23;
+  }
+  return 0x7f800000; // +inf
 }
